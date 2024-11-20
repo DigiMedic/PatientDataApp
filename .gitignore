@@ -1,6 +1,7 @@
 ## .NET Core
 bin/
 obj/
+obj
 *.user
 *.userosscache
 *.sln.docstates
