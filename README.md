@@ -8,6 +8,7 @@ PatientDataApp je .NET aplikace zaměřená na správu pacientských dat včetn�
 - Správy DICOM/MRI snímků
 - GraphQL API pro flexibilní přístup k datům
 - Diagnostických výsledků
+- REST API pro práci se soubory
 
 ## Technologie
 
@@ -16,8 +17,35 @@ PatientDataApp je .NET aplikace zaměřená na správu pacientských dat včetn�
 - GraphQL (HotChocolate)
 - Docker a Docker Compose
 - DICOM standard
+- Cornerstone.js pro DICOM vizualizaci
 
-## GraphQL API Dokumentace
+## Konfigurace
+
+### Ukládání souborů
+```json
+{
+  "FileStorage": {
+    "MriImagesPath": "/app/data/mri-images",
+    "AllowedExtensions": [".dcm", ".jpg", ".png", ".pdf"]
+  }
+}
+```
+
+## API Dokumentace
+
+### REST API Endpointy
+
+#### Získání MRI snímku
+```
+GET /api/file/mri/{id}
+```
+- Vrací soubor snímku s příslušným Content-Type
+- Podporované formáty: DICOM (.dcm), JPEG (.jpg), PNG (.png), PDF (.pdf)
+- Chybové stavy:
+  - 404: Snímek nebo soubor nenalezen
+  - 500: Interní chyba serveru
+
+### GraphQL API
 
 API je dostupné na `http://localhost:5001/graphql/`
 
@@ -60,6 +88,7 @@ type MriImage {
   patientId: Int!           # ID pacienta
   acquisitionDate: DateTime! # Datum pořízení snímku
   imagePath: String!        # Cesta k souboru snímku
+  imageUrl: String!         # URL pro stažení snímku
   description: String       # Popis snímku
   findings: String         # Nálezy
   createdAt: DateTime!     # Datum vytvoření záznamu
@@ -74,6 +103,8 @@ type MriImage {
 1. Instalace závislostí:
 ```bash
 npm install @apollo/client graphql
+# Pro DICOM vizualizaci
+npm install cornerstone-core cornerstone-wado-image-loader
 ```
 
 2. Nastavení Apollo Client:
@@ -95,85 +126,90 @@ function App() {
 }
 ```
 
-3. Příklad dotazu na pacienty:
-```typescript
-import { useQuery, gql } from '@apollo/client';
+3. Komponenta pro zobrazení MRI snímků:
 
-const GET_PATIENTS = gql`
-  query GetPatients {
-    patients {
-      id
-      firstName
-      lastName
-      dateOfBirth
-      lastDiagnosis
-      diagnosticResults {
-        diagnosis
-        date
+Pro běžné obrazové formáty (JPG, PNG):
+```typescript
+const MriViewer = ({ imageUrl }) => {
+  return (
+    <div>
+      <img 
+        src={imageUrl} 
+        alt="MRI snímek"
+        style={{ maxWidth: '100%', height: 'auto' }}
+      />
+    </div>
+  );
+};
+```
+
+Pro DICOM soubory:
+```typescript
+import * as cornerstone from 'cornerstone-core';
+import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+
+const DicomViewer = ({ imageUrl }) => {
+  const viewerRef = useRef(null);
+
+  useEffect(() => {
+    if (viewerRef.current) {
+      cornerstone.enable(viewerRef.current);
+      
+      const loadAndDisplayImage = async () => {
+        const image = await cornerstone.loadImage(imageUrl);
+        cornerstone.displayImage(viewerRef.current, image);
+      };
+
+      loadAndDisplayImage();
+    }
+
+    return () => {
+      if (viewerRef.current) {
+        cornerstone.disable(viewerRef.current);
+      }
+    };
+  }, [imageUrl]);
+
+  return <div ref={viewerRef} style={{ width: '512px', height: '512px' }} />;
+};
+```
+
+4. Příklad použití v komponentě:
+```typescript
+const MriImagesList = () => {
+  const { loading, error, data } = useQuery(gql`
+    query GetMriImages {
+      mriImages {
+        id
+        imageUrl
+        acquisitionDate
+        description
+        findings
       }
     }
-  }
-`;
-
-function PatientsList() {
-  const { loading, error, data } = useQuery(GET_PATIENTS);
+  `);
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error: {error.message}</p>;
 
   return (
-    <ul>
-      {data.patients.map(patient => (
-        <li key={patient.id}>
-          {patient.firstName} {patient.lastName}
-        </li>
+    <div>
+      {data.mriImages.map(image => (
+        <div key={image.id}>
+          <h3>MRI snímek {image.id}</h3>
+          <p>Pořízeno: {new Date(image.acquisitionDate).toLocaleDateString()}</p>
+          {image.imageUrl.endsWith('.dcm') ? (
+            <DicomViewer imageUrl={image.imageUrl} />
+          ) : (
+            <MriViewer imageUrl={image.imageUrl} />
+          )}
+          <p>Popis: {image.description}</p>
+          <p>Nálezy: {image.findings}</p>
+        </div>
       ))}
-    </ul>
+    </div>
   );
-}
-```
-
-4. Příklad mutace pro vytvoření pacienta:
-```typescript
-import { useMutation, gql } from '@apollo/client';
-
-const CREATE_PATIENT = gql`
-  mutation CreatePatient(
-    $firstName: String!
-    $lastName: String!
-    $dateOfBirth: DateTime!
-    $personalId: String!
-  ) {
-    createPatient(
-      firstName: $firstName
-      lastName: $lastName
-      dateOfBirth: $dateOfBirth
-      personalId: $personalId
-    ) {
-      id
-      firstName
-      lastName
-    }
-  }
-`;
-
-function CreatePatientForm() {
-  const [createPatient, { data, loading, error }] = useMutation(CREATE_PATIENT);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    createPatient({
-      variables: {
-        firstName: "Jan",
-        lastName: "Novák",
-        dateOfBirth: "1990-01-01T00:00:00",
-        personalId: "9001011234"
-      }
-    });
-  };
-
-  // Render form...
-}
+};
 ```
 
 ### Filtrování a řazení
@@ -256,6 +292,7 @@ if (error) {
 1. **Cachování**
    - Využívejte Apollo Cache pro optimalizaci výkonu
    - Nastavte správné cache policies pro jednotlivé typy
+   - Pro MRI snímky zvažte implementaci lokálního cachování
 
 2. **Optimalizace dotazů**
    - Požadujte pouze potřebná pole
@@ -267,9 +304,10 @@ if (error) {
    - Poskytněte uživatelsky přívětivé chybové hlášky
    - Logujte chyby pro debugging
 
-4. **Typová bezpečnost**
-   - Využívejte GraphQL Code Generator pro generování TypeScript typů
-   - Implementujte strict type checking
+4. **Práce s DICOM soubory**
+   - Používejte Cornerstone.js pro zobrazení DICOM souborů
+   - Implementujte lazy loading pro velké DICOM soubory
+   - Zvažte použití Web Workers pro zpracování DICOM dat
 
 ## Nasazení
 
@@ -296,6 +334,7 @@ Script automaticky:
 
 Po dokončení bude aplikace dostupná na:
 - GraphQL API: http://localhost:5001/graphql/
+- REST API pro soubory: http://localhost:5001/api/file/
 
 ### Manuální nasazení
 
@@ -305,6 +344,7 @@ Pouze pokud nemůžete použít automatické nasazení:
    - .NET 8.0 SDK
    - PostgreSQL
    - Nastavený connection string v appsettings.json
+   - Nastavená cesta pro ukládání souborů v appsettings.json
 
 2. Spuštění:
 ```bash
@@ -322,3 +362,4 @@ Databázové schéma je automaticky inicializováno při prvním spuštění pom
 - Pro vývoj je dostupný GraphQL Playground na `/graphql` v development módu
 - DICOM metadata lze filtrovat a zpracovávat pomocí specializovaných filtrů
 - Projekt používá repository pattern pro oddělení datové vrstvy
+- Soubory jsou ukládány v konfigurovaném adresáři s podporou více formátů
