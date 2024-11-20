@@ -130,3 +130,4 @@
 /Users/petrsovadina/Desktop/develope/Projekty/NeuronaLab/PatientDataApp/obj/Debug/net8.0/PatientDataApp.pdb
 /Users/petrsovadina/Desktop/develope/Projekty/NeuronaLab/PatientDataApp/obj/Debug/net8.0/PatientDataApp.genruntimeconfig.cache
 /Users/petrsovadina/Desktop/develope/Projekty/NeuronaLab/PatientDataApp/obj/Debug/net8.0/ref/PatientDataApp.dll
+/Users/petrsovadina/Desktop/develope/Projekty/NeuronaLab/PatientDataApp/bin/Debug/net8.0/appsettings.Development.json

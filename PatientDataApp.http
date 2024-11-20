@@ -1,6 +1,6 @@
-@PatientDataApp_HostAddress = http://localhost:5280
+@PatientDataApp_HostAddress = http://localhost:8080
 
-GET {{PatientDataApp_HostAddress}}/weatherforecast/
+GET {{PatientDataApp_HostAddress}}/graphql/
 Accept: application/json
 
 ###

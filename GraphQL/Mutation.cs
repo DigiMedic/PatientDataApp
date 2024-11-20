@@ -1,65 +1,130 @@
 using HotChocolate;
-using HotChocolate.Types;
+using Microsoft.EntityFrameworkCore;
 using PatientDataApp.Data;
 using PatientDataApp.Models;
-using PatientDataApp.GraphQL;
-using Microsoft.EntityFrameworkCore;
 
 namespace PatientDataApp.GraphQL;
 
-[GraphQLDescription("Mutations for managing patients")]
 public class Mutation
 {
-    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
-
-    public Mutation(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public async Task<Patient> CreatePatient(
+        string firstName, 
+        string lastName, 
+        DateTime dateOfBirth,
+        string personalId,
+        string? insuranceCompany,
+        string? initialDiagnosis,
+        [Service] PatientDbContext context)
     {
-        _contextFactory = contextFactory;
+        // Kontrola unikátnosti PersonalId
+        if (await context.Patients.AnyAsync(p => p.PersonalId == personalId))
+        {
+            throw new GraphQLException("Personal ID already exists.");
+        }
+
+        var patient = new Patient
+        {
+            FirstName = firstName,
+            LastName = lastName,
+            DateOfBirth = dateOfBirth,
+            PersonalId = personalId,
+            InsuranceCompany = insuranceCompany,
+            LastDiagnosis = initialDiagnosis,
+            LastExaminationDate = DateTime.UtcNow
+        };
+
+        context.Patients.Add(patient);
+        await context.SaveChangesAsync();
+
+        return patient;
     }
 
-    [GraphQLDescription("Add a new patient")]
-    public async Task<Patient> AddPatient(
-        string name, 
-        int age, 
-        string lastDiagnosis)
+    public async Task<DiagnosticResult> AddDiagnosticResult(
+        int patientId, 
+        string diagnosis, 
+        string? description,
+        DateTime? examinationDate,
+        [Service] PatientDbContext context)
     {
-        using var context = await _contextFactory.CreateDbContextAsync();
-        try 
-        {
-            var patient = new Patient
-            {
-                Name = name,
-                Age = age,
-                LastDiagnosis = lastDiagnosis
-            };
-
-            await context.Patients.AddAsync(patient);
-            await context.SaveChangesAsync();
-
-            return patient;
-        }
-        catch (Exception ex)
-        {
-            throw new GraphQLException(
-                new Error("Failed to add patient", ex.Message));
-        }
-    }
-
-    [GraphQLDescription("Update existing patient")]
-    public async Task<Patient> UpdatePatient(int id, string name, int age, string lastDiagnosis)
-    {
-        using var context = await _contextFactory.CreateDbContextAsync();
-        var patient = await context.Patients.FirstOrDefaultAsync(p => p.Id == id);
-
+        var patient = await context.Patients.FindAsync(patientId);
         if (patient == null)
         {
-            throw new GraphQLException(new Error("Patient not found", "NOT_FOUND"));
+            throw new GraphQLException("Patient not found.");
         }
 
-        patient.Name = name;
-        patient.Age = age;
-        patient.LastDiagnosis = lastDiagnosis;
+        var diagnosticResult = new DiagnosticResult
+        {
+            PatientId = patientId,
+            Diagnosis = diagnosis,
+            Description = description,
+            Date = examinationDate ?? DateTime.UtcNow
+        };
 
+        patient.LastDiagnosis = diagnosis;
+        patient.LastExaminationDate = diagnosticResult.Date;
+        patient.UpdatedAt = DateTime.UtcNow;
+
+        context.DiagnosticResults.Add(diagnosticResult);
+        await context.SaveChangesAsync();
+
+        return diagnosticResult;
+    }
+
+    public async Task<MriImage> AddMriImage(
+        int patientId,
+        string imagePath,
+        DateTime acquisitionDate,
+        string? description,
+        string? findings,
+        [Service] PatientDbContext context)
+    {
+        var patient = await context.Patients.FindAsync(patientId);
+        if (patient == null)
+        {
+            throw new GraphQLException("Patient not found.");
+        }
+
+        var mriImage = new MriImage
+        {
+            PatientId = patientId,
+            ImagePath = imagePath,
+            AcquisitionDate = acquisitionDate,
+            Description = description,
+            Findings = findings
+        };
+
+        patient.LastExaminationDate = acquisitionDate;
+        patient.UpdatedAt = DateTime.UtcNow;
+
+        context.MriImages.Add(mriImage);
+        await context.SaveChangesAsync();
+
+        return mriImage;
+    }
+
+    public async Task<Patient> UpdatePatientDiagnosticData(
+        int patientId,
+        string? diagnosis,
+        string? insuranceCompany,
+        [Service] PatientDbContext context)
+    {
+        var patient = await context.Patients.FindAsync(patientId);
+        if (patient == null)
+        {
+            throw new GraphQLException("Patient not found.");
+        }
+
+        if (diagnosis != null)
+        {
+            patient.LastDiagnosis = diagnosis;
+        }
+
+        if (insuranceCompany != null)
+        {
+            patient.InsuranceCompany = insuranceCompany;
+        }
+
+        patient.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         return patient;
