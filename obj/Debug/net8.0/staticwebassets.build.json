@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "5Z0CKTuUzSloWCWeJfKJyTM1ADxgl8eNtkJL1vAWoFc=",
+  "Source": "PatientDataApp",
+  "BasePath": "_content/PatientDataApp",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
