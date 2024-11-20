@@ -1,4 +1,5 @@
 # PatientDataApp
+![PatientDataApp Cover](https://utfs.io/f/NyKlEsePJFL1COQrCxdWwejYU1MKdpBnfkN9OAxasyq6XguL)
 
 Systém pro správu pacientských dat s podporou DICOM/MRI snímků.
 
