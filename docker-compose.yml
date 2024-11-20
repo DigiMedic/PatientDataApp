@@ -1,35 +1,31 @@
+version: '3.8'
+
 services:
-  app:
+  api:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "5000:80"
+      - "${API_PORT:-5001}:8080"
     environment:
+      - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=db;Database=patientdb;Username=postgres;Password=postgres;
-      - ASPNETCORE_ENVIRONMENT=Production
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     networks:
       - patient-network
 
   db:
     image: postgres:14
     environment:
-      POSTGRES_DB: patientdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      - POSTGRES_DB=patientdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
     networks:
       - patient-network
 
@@ -38,4 +34,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres-data: 
+  postgres-data:

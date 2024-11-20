@@ -1,118 +1,84 @@
 using HotChocolate;
-using HotChocolate.Types;
+using HotChocolate.Data;
+using Microsoft.EntityFrameworkCore;
 using PatientDataApp.Data;
 using PatientDataApp.Models;
-using Microsoft.EntityFrameworkCore;
-using PatientDataApp.Repositories;
 
 namespace PatientDataApp.GraphQL;
 
-[GraphQLDescription("Queries for retrieving patients")]
 public class Query
 {
-    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly ILogger<Query> _logger;
 
-    public Query(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public Query(ILogger<Query> logger)
     {
-        _contextFactory = contextFactory;
+        _logger = logger;
     }
 
+    [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public async Task<IEnumerable<Patient>> GetPatients()
+    public async Task<IEnumerable<Patient>> GetPatients([Service] PatientDbContext context)
     {
-        using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Patients
-            .Select(p => new Patient
-            {
-                Id = p.Id,
-                Name = p.Name,
-                Age = p.Age,
-                LastDiagnosis = p.LastDiagnosis
-            })
-            .ToListAsync();
-    }
-
-    public async Task<Patient?> GetPatientById(int id)
-    {
-        using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Patients.FirstOrDefaultAsync(p => p.Id == id);
-    }
-
-    public async Task<IEnumerable<MriImage>> GetMriImages(
-        [Service] IMriImageRepository repository,
-        int patientId)
-    {
-        return await repository.GetAllByPatientIdAsync(patientId);
-    }
-
-    public async Task<IEnumerable<MriImage>> GetMriImagesByDateRange(
-        [Service] IMriImageRepository repository,
-        int patientId,
-        DateTime startDate,
-        DateTime endDate)
-    {
-        return await repository.GetByDateRangeAsync(patientId, startDate, endDate);
-    }
-
-    [UseFiltering]
-    [UseSorting]
-    public async Task<IEnumerable<MriImage>> SearchMriImages(
-        [Service] IMriImageRepository repository,
-        MriImageFilterInput filter)
-    {
-        var query = repository.GetQueryable();
-
-        if (filter.PatientId.HasValue)
-            query = query.Where(m => m.PatientId == filter.PatientId);
-
-        if (!string.IsNullOrEmpty(filter.StudyType))
-            query = query.Where(m => m.StudyType == filter.StudyType);
-
-        if (!string.IsNullOrEmpty(filter.BodyPart))
-            query = query.Where(m => m.BodyPart == filter.BodyPart);
-
-        if (filter.StartDate.HasValue)
-            query = query.Where(m => m.UploadedAt >= filter.StartDate);
-
-        if (filter.EndDate.HasValue)
-            query = query.Where(m => m.UploadedAt <= filter.EndDate);
-
-        if (filter.Tags != null && filter.Tags.Any())
-            query = query.Where(m => filter.Tags.All(t => m.Tags.ContainsKey(t)));
-
-        return await query
-            .OrderByDescending(m => m.UploadedAt)
-            .ToListAsync();
-    }
-
-    [GraphQLDescription("Získá statistiky MRI snímků")]
-    public async Task<MriStatistics> GetMriStatistics(
-        [Service] IMriImageRepository repository,
-        int? patientId = null)
-    {
-        var query = repository.GetQueryable();
-        if (patientId.HasValue)
-            query = query.Where(m => m.PatientId == patientId);
-
-        return new MriStatistics
+        try
         {
-            TotalCount = await query.CountAsync(),
-            StudyTypeCounts = await query
-                .GroupBy(m => m.StudyType)
-                .Select(g => new KeyValuePair<string, int>(g.Key, g.Count()))
-                .ToListAsync(),
-            BodyPartCounts = await query
-                .GroupBy(m => m.BodyPart)
-                .Select(g => new KeyValuePair<string, int>(g.Key, g.Count()))
-                .ToListAsync()
-        };
+            return await context.Patients
+                .Include(p => p.DiagnosticResults)
+                .Include(p => p.MriImages)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching patients");
+            throw;
+        }
     }
-}
 
-public class MriStatistics
-{
-    public int TotalCount { get; set; }
-    public List<KeyValuePair<string, int>> StudyTypeCounts { get; set; }
-    public List<KeyValuePair<string, int>> BodyPartCounts { get; set; }
+    public async Task<Patient?> GetPatient([Service] PatientDbContext context, int id)
+    {
+        try
+        {
+            return await context.Patients
+                .Include(p => p.DiagnosticResults)
+                .Include(p => p.MriImages)
+                .FirstOrDefaultAsync(p => p.Id == id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching patient with ID {PatientId}", id);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<DiagnosticResult>> GetDiagnosticResults([Service] PatientDbContext context)
+    {
+        try
+        {
+            return await context.DiagnosticResults
+                .Include(d => d.Patient)
+                .OrderByDescending(d => d.Date)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching diagnostic results");
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<MriImage>> GetMriImages([Service] PatientDbContext context)
+    {
+        try
+        {
+            return await context.MriImages
+                .Include(m => m.Patient)
+                .OrderByDescending(m => m.AcquisitionDate)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching MRI images");
+            throw;
+        }
+    }
 }

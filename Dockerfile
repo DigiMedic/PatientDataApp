@@ -1,24 +1,19 @@
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 80
+EXPOSE 443
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-
-# Kopírování a obnovení závislostí
 COPY ["PatientDataApp.csproj", "./"]
-RUN dotnet restore
-
-# Kopírování zdrojového kódu
+RUN dotnet restore "PatientDataApp.csproj"
 COPY . .
+RUN dotnet build "PatientDataApp.csproj" -c Release -o /app/build
 
-# Publikování aplikace
-RUN dotnet publish -c Release -o /app/publish
+FROM build AS publish
+RUN dotnet publish "PatientDataApp.csproj" -c Release -o /app/publish
 
-# Runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM base AS final
 WORKDIR /app
-COPY --from=build /app/publish .
-
-# Nastavení proměnných prostředí
-ENV ASPNETCORE_URLS=http://+:80
-ENV ASPNETCORE_ENVIRONMENT=Production
-
-EXPOSE 80
-ENTRYPOINT ["dotnet", "PatientDataApp.dll"] 
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "PatientDataApp.dll"]
