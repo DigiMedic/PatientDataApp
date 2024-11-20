@@ -1,11 +1,10 @@
 using PatientDataApp.Data;
 using PatientDataApp.GraphQL;
+using PatientDataApp.GraphQL.Types;
+using PatientDataApp.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Explicitní nastavení URL a portu pro .NET 8
-builder.WebHost.UseUrls("http://localhost:8080");
 
 // Přidání CORS
 builder.Services.AddCors(options =>
@@ -18,38 +17,35 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Přidání Antiforgery služby
-builder.Services.AddAntiforgery();
+// Registrace služeb
+builder.Services.AddScoped<IMriImageRepository, MriImageRepository>();
+builder.Services.AddScoped<DicomService>();
 
-// Přidání kontrolerů pro FHIR API
-builder.Services.AddControllers();
+// Konfigurace DbContext
+builder.Services.AddDbContextFactory<PatientDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Přidání GraphQL serveru pro .NET 8
+// Konfigurace GraphQL
 builder.Services
     .AddGraphQLServer()
     .AddQueryType<Query>()
     .AddMutationType<Mutation>()
+    .AddType<UploadType>()
+    .AddType<MriImageType>()
+    .AddType<PatientType>()
     .AddFiltering()
     .AddSorting()
-    .AddErrorFilter<GraphQLErrorFilter>()
-    .ModifyRequestOptions(opt => opt.IncludeExceptionDetails = true);
-
-// Přidání DbContext
-builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    .AddProjections()
+    .AddAuthorization()
+    .AddMaxFileSize(20_000_000) // 20MB limit
+    .AddRequestOptions(opt => opt.IncludeExceptionDetails = true);
 
 var app = builder.Build();
 
-// Antiforgery middleware pro .NET 8
-app.UseAntiforgery();
-
-// Povolení CORS
 app.UseCors();
 
-// Přesměrování z root URL na /graphql
-app.MapGet("/", () => Results.Redirect("/graphql"));
-
-app.MapControllers();
+// GraphQL endpoint a playground
 app.MapGraphQL();
+app.MapGraphQLVoyager("ui/voyager");
 
 app.Run();
