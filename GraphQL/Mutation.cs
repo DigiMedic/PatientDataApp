@@ -133,4 +133,53 @@ public class Mutation
 
         return patient;
     }
+
+    public class GenerateTestDataResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public GeneratedCounts GeneratedCounts { get; set; } = new();
+    }
+
+    public class GeneratedCounts
+    {
+        public int Patients { get; set; }
+        public int DiagnosticResults { get; set; }
+        public int MriImages { get; set; }
+    }
+
+    public async Task<GenerateTestDataResult> GenerateTestData(
+        [Service] TestDataGenerator generator,
+        int patientCount = 10,
+        int maxDiagnosticResultsPerPatient = 3,
+        int maxMriImagesPerPatient = 2)
+    {
+        try
+        {
+            await generator.GenerateTestDataAsync(
+                patientCount,
+                maxDiagnosticResultsPerPatient,
+                maxMriImagesPerPatient);
+
+            return new GenerateTestDataResult
+            {
+                Success = true,
+                Message = "Test data generated successfully",
+                GeneratedCounts = new GeneratedCounts
+                {
+                    Patients = patientCount,
+                    DiagnosticResults = patientCount * maxDiagnosticResultsPerPatient,
+                    MriImages = patientCount * maxMriImagesPerPatient
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new GenerateTestDataResult
+            {
+                Success = false,
+                Message = $"Error generating test data: {ex.Message}"
+            };
+        }
+    }
 }

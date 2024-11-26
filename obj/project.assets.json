@@ -62,6 +62,20 @@
           "lib/netstandard1.3/DotNetEnv.dll": {}
         }
       },
+      "EFCore.NamingConventions/8.0.0-rc.2": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore": "[8.0.0-rc.2.23480.1, 9.0.0)",
+          "Microsoft.EntityFrameworkCore.Relational": "[8.0.0-rc.2.23480.1, 9.0.0)",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.0-rc.2.23479.6"
+        },
+        "compile": {
+          "lib/net8.0/EFCore.NamingConventions.dll": {}
+        },
+        "runtime": {
+          "lib/net8.0/EFCore.NamingConventions.dll": {}
+        }
+      },
       "Fhir.Metrics/1.2.2": {
         "type": "package",
         "compile": {
@@ -3160,6 +3174,18 @@
         "dotnetenv.2.5.0.nupkg.sha512",
         "dotnetenv.nuspec",
         "lib/netstandard1.3/DotNetEnv.dll"
+      ]
+    },
+    "EFCore.NamingConventions/8.0.0-rc.2": {
+      "sha512": "bj+xYp5rTzWyBlEJyUj8ymb2ps6/LTR780CQ7hhDP6yiyCVooQRV2fg6KatYX95/4mToA/EYz/27x4tccFtZkg==",
+      "type": "package",
+      "path": "efcore.namingconventions/8.0.0-rc.2",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "efcore.namingconventions.8.0.0-rc.2.nupkg.sha512",
+        "efcore.namingconventions.nuspec",
+        "lib/net8.0/EFCore.NamingConventions.dll"
       ]
     },
     "Fhir.Metrics/1.2.2": {
@@ -9104,6 +9130,7 @@
       "AspNetCore.HealthChecks.NpgSql >= 7.1.0",
       "Bogus >= 35.0.1",
       "DotNetEnv >= 2.5.0",
+      "EFCore.NamingConventions >= 8.0.0-rc.2",
       "Hl7.Fhir.R4 >= 5.3.0",
       "HotChocolate.AspNetCore >= 13.7.0",
       "HotChocolate.Data.EntityFramework >= 13.7.0",
@@ -9170,6 +9197,10 @@
           "DotNetEnv": {
             "target": "Package",
             "version": "[2.5.0, )"
+          },
+          "EFCore.NamingConventions": {
+            "target": "Package",
+            "version": "[8.0.0-rc.2, )"
           },
           "Hl7.Fhir.R4": {
             "target": "Package",

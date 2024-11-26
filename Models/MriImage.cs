@@ -23,6 +23,8 @@ public class MriImage
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    
     // Vztah
     public virtual Patient? Patient { get; set; }
 }

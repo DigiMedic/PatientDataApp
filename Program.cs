@@ -34,19 +34,16 @@ builder.Logging.SetMinimumLevel(LogLevel.Debug);
 var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 var dbLogger = loggerFactory.CreateLogger("Database");
 
-// Získání connection stringu
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrEmpty(connectionString))
+// Configure connection string
+var connectionString = $"Host={Environment.GetEnvironmentVariable("DB_HOST")};" +
+                      $"Database={Environment.GetEnvironmentVariable("DB_NAME")};" +
+                      $"Username={Environment.GetEnvironmentVariable("DB_USER")};" +
+                      $"Password={Environment.GetEnvironmentVariable("DB_PASSWORD")}";
+var configData = new Dictionary<string, string?>
 {
-    // Fallback na environment proměnné
-    var dbHost = Environment.GetEnvironmentVariable("DB_HOST") ?? "db";
-    var dbPort = Environment.GetEnvironmentVariable("DB_PORT") ?? "5432";
-    var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "patientdb";
-    var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "postgres";
-    var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "postgres";
-
-    connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword};Command Timeout=30;Internal Command Timeout=30";
-}
+    {"ConnectionStrings:DefaultConnection", connectionString}
+};
+builder.Configuration.AddInMemoryCollection(configData);
 
 // Přidání health checks s podporou pro PostgreSQL
 builder.Services.AddHealthChecks()
@@ -58,30 +55,26 @@ builder.Services.AddHealthChecks()
         timeout: TimeSpan.FromSeconds(30))
     .AddCheck("API", () => HealthCheckResult.Healthy());
 
-// Konfigurace DbContext
-builder.Services.AddDbContextFactory<PatientDbContext>(options =>
+// Add DB Context
+builder.Services.AddDbContext<PatientDbContext>(options =>
 {
-    dbLogger.LogInformation("Attempting to connect to database...");
-
-    // Logování connection stringu bez citlivých údajů
-    var sanitizedConnectionString = connectionString.Replace(Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "postgres", "********");
-    dbLogger.LogInformation($"Using database connection string: {sanitizedConnectionString}");
-
     options.UseNpgsql(connectionString, npgsqlOptions =>
     {
-        npgsqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 5,
-            maxRetryDelay: TimeSpan.FromSeconds(30),
-            errorCodesToAdd: null);
+        npgsqlOptions.EnableRetryOnFailure(3);
         npgsqlOptions.CommandTimeout(30);
-    });
-    
+        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory");
+    })
+    .UseSnakeCaseNamingConvention();
+
     if (builder.Environment.IsDevelopment())
     {
         options.EnableSensitiveDataLogging();
         options.EnableDetailedErrors();
     }
 });
+
+// Add TestDataGenerator as a scoped service
+builder.Services.AddScoped<TestDataGenerator>();
 
 // Konfigurace JSON options
 builder.Services.Configure<JsonOptions>(options =>
@@ -167,22 +160,21 @@ builder.Services
 
 var app = builder.Build();
 
-// Automatická migrace databáze při startu
-using (var scope = app.Services.CreateScope())
+// Apply migrations
+try
 {
-    var services = scope.ServiceProvider;
-    try
+    using (var scope = app.Services.CreateScope())
     {
-        var context = services.GetRequiredService<PatientDbContext>();
-        dbLogger.LogInformation("Attempting to migrate database...");
-        context.Database.Migrate();
-        dbLogger.LogInformation("Database migration completed successfully.");
+        var dbContext = scope.ServiceProvider.GetRequiredService<PatientDbContext>();
+        dbContext.Database.EnsureDeleted(); // Reset database
+        dbContext.Database.Migrate();
     }
-    catch (Exception ex)
-    {
-        dbLogger.LogError(ex, "An error occurred while migrating the database.");
-        throw;
-    }
+    app.Logger.LogInformation("Database migrated successfully");
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "An error occurred while migrating the database");
+    throw;
 }
 
 // Vývojové prostředí

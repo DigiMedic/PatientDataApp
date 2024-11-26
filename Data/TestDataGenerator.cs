@@ -38,14 +38,15 @@ public class TestDataGenerator
         {
             _logger.LogInformation("Začínám generování testovacích dat...");
 
-            var faker = new Faker("cs");
+            var faker = new Faker("en_US");
             var patients = new List<Patient>();
 
             // Generování pacientů
             for (int i = 0; i < patientCount; i++)
             {
                 var gender = faker.PickRandom<Bogus.DataSets.Name.Gender>();
-                var birthDate = faker.Date.Between(DateTime.Now.AddYears(-90), DateTime.Now.AddYears(-18));
+                var birthDate = faker.Date.Between(DateTime.UtcNow.AddYears(-90), DateTime.UtcNow.AddYears(-18));
+                var lastExamDate = faker.Date.Recent().ToUniversalTime();
                 
                 var patient = new Patient
                 {
@@ -53,31 +54,25 @@ public class TestDataGenerator
                         faker.Name.FirstName(Bogus.DataSets.Name.Gender.Female) : 
                         faker.Name.FirstName(Bogus.DataSets.Name.Gender.Male),
                     LastName = faker.Name.LastName(),
-                    DateOfBirth = birthDate,
-                    PersonalId = GeneratePersonalId(birthDate, gender == Bogus.DataSets.Name.Gender.Female),
+                    DateOfBirth = birthDate.ToUniversalTime(),
+                    PersonalId = await GeneratePersonalId(birthDate, gender == Bogus.DataSets.Name.Gender.Female),
                     Gender = gender == Bogus.DataSets.Name.Gender.Female ? "F" : "M",
                     InsuranceCompany = faker.PickRandom(_insuranceCompanies),
                     LastDiagnosis = faker.PickRandom(_commonDiagnoses),
-                    LastExaminationDate = faker.Date.Recent(),
+                    LastExaminationDate = lastExamDate,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                patients.Add(patient);
-            }
+                await _context.Patients.AddAsync(patient);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Pacient {patient.FirstName} {patient.LastName} úspěšně uložen");
 
-            await _context.Patients.AddRangeAsync(patients);
-            await _context.SaveChangesAsync();
-
-            // Generování diagnostických výsledků
-            foreach (var patient in patients)
-            {
+                // Generování diagnostických výsledků pro tohoto pacienta
                 var diagnosticResultCount = faker.Random.Int(1, maxDiagnosticResultsPerPatient);
-                var diagnosticResults = new List<DiagnosticResult>();
-
-                for (int i = 0; i < diagnosticResultCount; i++)
+                for (int j = 0; j < diagnosticResultCount; j++)
                 {
-                    var date = faker.Date.Between(patient.CreatedAt, DateTime.UtcNow);
+                    var date = faker.Date.Between(patient.CreatedAt, DateTime.UtcNow).ToUniversalTime();
                     var diagnosis = faker.PickRandom(_commonDiagnoses);
 
                     var result = new DiagnosticResult
@@ -85,50 +80,47 @@ public class TestDataGenerator
                         PatientId = patient.Id,
                         Diagnosis = diagnosis,
                         Description = faker.Lorem.Paragraph(),
-                        Date = date
+                        Date = date,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     };
 
-                    diagnosticResults.Add(result);
-
-                    if (i == diagnosticResultCount - 1)
+                    await _context.DiagnosticResults.AddAsync(result);
+                    
+                    if (j == diagnosticResultCount - 1)
                     {
                         patient.LastDiagnosis = diagnosis;
                         patient.LastExaminationDate = date;
+                        _context.Patients.Update(patient);
                     }
                 }
+                await _context.SaveChangesAsync();
 
-                await _context.DiagnosticResults.AddRangeAsync(diagnosticResults);
-            }
-
-            await _context.SaveChangesAsync();
-
-            // Generování MRI snímků
-            foreach (var patient in patients)
-            {
+                // Generování MRI snímků
                 var mriCount = faker.Random.Int(0, maxMriImagesPerPatient);
                 var mriImages = new List<MriImage>();
 
-                for (int i = 0; i < mriCount; i++)
+                for (int k = 0; k < mriCount; k++)
                 {
-                    var acquisitionDate = faker.Date.Between(patient.CreatedAt, DateTime.UtcNow);
+                    var acquisitionDate = faker.Date.Between(patient.CreatedAt, DateTime.UtcNow).ToUniversalTime();
                     
                     var mriImage = new MriImage
                     {
                         PatientId = patient.Id,
-                        ImagePath = $"/data/mri-images/patient_{patient.Id}_mri_{i + 1}.dcm",
+                        ImagePath = $"/data/mri-images/patient_{patient.Id}_mri_{k + 1}.dcm",
                         AcquisitionDate = acquisitionDate,
                         Description = faker.Lorem.Sentence(),
                         Findings = faker.Lorem.Paragraph(),
-                        CreatedAt = acquisitionDate
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     };
 
                     mriImages.Add(mriImage);
                 }
 
                 await _context.MriImages.AddRangeAsync(mriImages);
+                await _context.SaveChangesAsync();
             }
-
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation($"Úspěšně vygenerováno {patientCount} pacientů s jejich záznamy.");
         }
@@ -139,12 +131,19 @@ public class TestDataGenerator
         }
     }
 
-    private string GeneratePersonalId(DateTime birthDate, bool isFemale)
+    private async Task<string> GeneratePersonalId(DateTime birthDate, bool isFemale)
     {
         var year = birthDate.Year % 100;
         var month = birthDate.Month + (isFemale ? 50 : 0);
         var day = birthDate.Day;
-        var random = new Random().Next(1000);
-        return $"{year:00}{month:00}{day:00}/{random:000}";
+        
+        string personalId;
+        do
+        {
+            var random = new Random().Next(1000);
+            personalId = $"{year:00}{month:00}{day:00}/{random:000}";
+        } while (await _context.Patients.AnyAsync(p => p.PersonalId == personalId));
+
+        return personalId;
     }
 }

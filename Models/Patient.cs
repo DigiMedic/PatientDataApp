@@ -25,13 +25,16 @@ public class Patient
     [MaxLength(1)]
     public required string Gender { get; set; }
     
-    [EmailAddress]
-    [MaxLength(100)]
-    public string? Email { get; set; }
+    [MaxLength(200)]
+    public string? Address { get; set; }
     
     [Phone]
     [MaxLength(20)]
     public string? PhoneNumber { get; set; }
+    
+    [EmailAddress]
+    [MaxLength(100)]
+    public string? Email { get; set; }
     
     public string? LastDiagnosis { get; set; }
     
