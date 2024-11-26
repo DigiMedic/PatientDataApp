@@ -22,7 +22,36 @@ PatientDataApp je .NET aplikace zaměřená na správu pacientských dat včetn�
 
 ## Konfigurace
 
-### Ukládání souborů
+Aplikace používá `.env` soubory pro konfiguraci. Pro nastavení vlastní konfigurace:
+
+1. Zkopírujte `.env.example` do nového souboru `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Upravte hodnoty v `.env` souboru podle vašich potřeb:
+   - Databázové připojení (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD)
+   - JWT autentizace (JWT_KEY, JWT_ISSUER, JWT_AUDIENCE, JWT_EXPIRY_MINUTES)
+   - Nastavení serveru (ASPNETCORE_URLS, ASPNETCORE_ENVIRONMENT)
+   - Limity požadavků (MAX_REQUEST_BODY_SIZE, KEEP_ALIVE_TIMEOUT_MINUTES)
+   - Logování (LOG_LEVEL, ENABLE_SENSITIVE_DATA_LOGGING)
+   - CORS nastavení
+   - GraphQL konfigurace
+   - Správa souborů a výkon
+
+### Důležité bezpečnostní poznámky:
+- Nikdy necommitujte `.env` soubor do git repozitáře
+- V produkčním prostředí vždy změňte výchozí hesla a klíče
+- Pro vývoj používejte jiné přístupové údaje než v produkci
+- Omezte CORS nastavení pouze na potřebné domény
+
+### Docker konfigurace:
+Při použití Dockeru jsou proměnné z `.env` souboru automaticky načteny do kontejnerů:
+```bash
+docker-compose up -d
+```
+
+## Ukládání souborů
 ```json
 {
   "FileStorage": {
@@ -310,49 +339,211 @@ if (error) {
    - Implementujte lazy loading pro velké DICOM soubory
    - Zvažte použití Web Workers pro zpracování DICOM dat
 
-## Nasazení
+## Generování testovacích dat
 
-### Automatické nasazení (doporučeno)
+Aplikace obsahuje vestavěný generátor testovacích dat, který vytváří realistická data českých pacientů včetně:
+- Jména a příjmení
+- Rodných čísel
+- Pojišťoven
+- Diagnóz
+- Diagnostických výsledků
+- MRI snímků
+
+### Automatické generování
+
+V development módu se testovací data automaticky vygenerují při prvním spuštění aplikace, pokud je databáze prázdná.
+
+### Manuální generování
+
+Testovací data můžete vygenerovat pomocí HTTP endpointu:
+
+```bash
+# Vygeneruje 50 pacientů s jejich záznamy
+curl -X POST "http://localhost:8080/api/generate-test-data?patientCount=50"
+```
+
+### Přístup k testovacím datům přes GraphQL
+
+Vygenerovaná data jsou okamžitě dostupná přes GraphQL API. Příklady dotazů:
+
+```graphql
+# Získání všech pacientů s jejich záznamy
+query {
+  patients {
+    id
+    firstName
+    lastName
+    dateOfBirth
+    personalId
+    insuranceCompany
+    lastDiagnosis
+    diagnosticResults {
+      diagnosis
+      description
+      date
+    }
+    mriImages {
+      acquisitionDate
+      imageUrl
+      findings
+    }
+  }
+}
+
+# Filtrování pacientů podle pojišťovny
+query {
+  patients(
+    where: { insuranceCompany: { eq: "VZP" } }
+  ) {
+    firstName
+    lastName
+    insuranceCompany
+    lastDiagnosis
+  }
+}
+
+# Získání posledních diagnostických výsledků
+query {
+  diagnosticResults(
+    order: { date: DESC }
+    first: 10
+  ) {
+    diagnosis
+    date
+    patient {
+      firstName
+      lastName
+    }
+  }
+}
+```
+
+Vygenerovaná data obsahují:
+- 50 pacientů (výchozí hodnota)
+- 1-5 diagnostických výsledků na pacienta
+- 0-3 MRI snímků na pacienta
+
+## Instalace a spuštění
+
+### Požadavky
+- Docker a Docker Compose
+- .NET 8.0 SDK (pro lokální vývoj)
+- Node.js 18+ (pro frontend)
+- PostgreSQL 14+ (pro lokální vývoj bez Dockeru)
+
+### Spuštění pomocí Dockeru (doporučeno)
 
 1. Naklonujte repozitář:
-```bash
-git clone [URL_repozitáře]
-cd PatientDataApp
-```
+   ```bash
+   git clone https://github.com/your-org/PatientDataApp.git
+   cd PatientDataApp
+   ```
 
-2. Spusťte deployment script:
-```bash
-chmod +x deploy.sh  # Nastavení práv pro spuštění
-./deploy.sh
-```
+2. Vytvořte konfigurační soubor:
+   ```bash
+   cp .env.example .env
+   # Upravte hodnoty v .env podle potřeby
+   ```
 
-Script automaticky:
-- Zastaví běžící kontejnery
-- Vyčistí Docker images
-- Nastaví správný port (5001)
-- Sestaví a spustí aplikaci
-- Zobrazí průběh nasazení a logy
+3. Spusťte aplikaci:
+   ```bash
+   ./deploy.sh
+   ```
+   nebo manuálně:
+   ```bash
+   docker-compose up -d
+   ```
 
-Po dokončení bude aplikace dostupná na:
-- GraphQL API: http://localhost:5001/graphql/
-- REST API pro soubory: http://localhost:5001/api/file/
+4. Ověřte, že aplikace běží:
+   ```bash
+   curl http://localhost:8080/health
+   ```
 
-### Manuální nasazení
+### Lokální vývoj
 
-Pouze pokud nemůžete použít automatické nasazení:
+1. Nainstalujte závislosti:
+   ```bash
+   dotnet restore
+   ```
 
-1. Požadavky:
-   - .NET 8.0 SDK
-   - PostgreSQL
-   - Nastavený connection string v appsettings.json
-   - Nastavená cesta pro ukládání souborů v appsettings.json
+2. Nastavte PostgreSQL:
+   ```bash
+   # V .env nastavte DB_HOST=localhost
+   psql -U postgres -c "CREATE DATABASE patientdb;"
+   ```
 
-2. Spuštění:
-```bash
-dotnet restore
-dotnet build
-dotnet run
-```
+3. Spusťte migraci databáze:
+   ```bash
+   dotnet ef database update
+   ```
+
+4. Spusťte aplikaci:
+   ```bash
+   dotnet run
+   ```
+
+### Produkční nasazení
+
+1. Nastavte produkční proměnné v `.env`:
+   ```bash
+   ASPNETCORE_ENVIRONMENT=Production
+   LOG_LEVEL=Warning
+   CORS_ALLOW_ANY_ORIGIN=false
+   # Nastavte ostatní produkční hodnoty
+   ```
+
+2. Spusťte deploy skript:
+   ```bash
+   ./deploy.sh --env production
+   ```
+
+3. Ověřte nasazení:
+   ```bash
+   # Kontrola logů
+   docker-compose logs -f api
+
+   # Kontrola health endpointu
+   curl http://localhost:8080/health
+   ```
+
+### Řešení problémů
+
+1. **Databáze není dostupná:**
+   ```bash
+   # Kontrola stavu PostgreSQL
+   docker-compose ps
+   docker-compose logs db
+   ```
+
+2. **API není dostupné:**
+   ```bash
+   # Kontrola logů API
+   docker-compose logs api
+   ```
+
+3. **Problémy s oprávněními:**
+   ```bash
+   # Nastavení oprávnění pro MRI složku
+   sudo chown -R 1000:1000 ./data/mri-images
+   ```
+
+### Aktualizace aplikace
+
+1. Stáhněte nejnovější verzi:
+   ```bash
+   git pull origin main
+   ```
+
+2. Aktualizujte kontejnery:
+   ```bash
+   docker-compose pull
+   docker-compose up -d
+   ```
+
+3. Spusťte migrace:
+   ```bash
+   docker-compose exec api dotnet ef database update
+   ```
 
 ## Databáze
 
@@ -364,3 +555,66 @@ Databázové schéma je automaticky inicializováno při prvním spuštění pom
 - DICOM metadata lze filtrovat a zpracovávat pomocí specializovaných filtrů
 - Projekt používá repository pattern pro oddělení datové vrstvy
 - Soubory jsou ukládány v konfigurovaném adresáři s podporou více formátů
+
+## Časové zóny a práce s datem a časem
+
+Aplikace používá konzistentní přístup k práci s časovými údaji:
+
+### Časové zóny
+- Všechny časové údaje jsou interně ukládány a zpracovávány v UTC
+- Databáze ukládá všechna časová data v UTC formátu
+- API komunikuje výhradně v UTC formátu pomocí ISO 8601 (např. "2024-01-20T20:00:00Z")
+
+### Implementace v různých částech systému
+
+1. **Databázové operace**
+   ```csharp
+   // Správně - použití UTC času
+   patient.UpdatedAt = DateTime.UtcNow;
+   
+   // Špatně - nepoužívat lokální čas
+   patient.UpdatedAt = DateTime.Now;  // Toto nepoužívat!
+   ```
+
+2. **GraphQL API**
+   ```graphql
+   # Dotaz s časem v UTC
+   query {
+     patients(
+       examinedAfter: "2024-01-20T20:00:00Z"  # UTC čas
+     ) {
+       id
+       examinationTime  # Vráceno v UTC
+     }
+   }
+   ```
+
+3. **Serializace JSON**
+   - Všechny DateTime hodnoty jsou automaticky serializovány do UTC
+   - Používá se ISO 8601 formát s "Z" sufixem pro UTC
+   - Implementováno pomocí `DateTimeConverter`
+
+### Doporučení pro klientské aplikace
+1. Vždy posílejte časové údaje v UTC formátu
+2. Konvertujte UTC čas do lokální časové zóny až na úrovni prezentace
+3. Pro konverzi použijte standardní knihovny vašeho programovacího jazyka
+
+### Příklad konverze v různých jazycích
+
+**JavaScript:**
+```javascript
+// Konverze UTC na lokální čas
+const utcDate = new Date("2024-01-20T20:00:00Z");
+const localDate = new Date(utcDate.toLocaleString());
+```
+
+**C#:**
+```csharp
+// Konverze mezi UTC a lokálním časem
+DateTime utcTime = DateTime.UtcNow;
+DateTime localTime = utcTime.ToLocalTime();
+
+// Konverze do specifické časové zóny
+TimeZoneInfo cstZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+DateTime cstTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, cstZone);
+```

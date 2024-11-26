@@ -15,6 +15,8 @@ public class DiagnosticResultType : ObjectType<DiagnosticResult>
         descriptor.Field(d => d.Date).Type<NonNullType<DateTimeType>>();
         
         descriptor.Field(d => d.Patient)
-            .Type<PatientType>();
+            .Type<PatientType>()
+            .ResolveWith<Resolvers>(r => r.GetPatientForDiagnosticResult(default!, default!))
+            .UseDbContext<PatientDbContext>();
     }
 }

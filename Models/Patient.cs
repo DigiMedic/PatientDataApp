@@ -21,6 +21,18 @@ public class Patient
     [MaxLength(20)]
     public required string PersonalId { get; set; }
     
+    [Required]
+    [MaxLength(1)]
+    public required string Gender { get; set; }
+    
+    [EmailAddress]
+    [MaxLength(100)]
+    public string? Email { get; set; }
+    
+    [Phone]
+    [MaxLength(20)]
+    public string? PhoneNumber { get; set; }
+    
     public string? LastDiagnosis { get; set; }
     
     [MaxLength(50)]

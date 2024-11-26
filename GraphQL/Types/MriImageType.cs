@@ -17,6 +17,17 @@ public class MriImageType : ObjectType<MriImage>
         descriptor.Field(m => m.CreatedAt).Type<NonNullType<DateTimeType>>();
         
         descriptor.Field(m => m.Patient)
-            .Type<PatientType>();
+            .Type<PatientType>()
+            .ResolveWith<Resolvers>(r => r.GetPatientForMriImage(default!, default!))
+            .UseDbContext<PatientDbContext>();
+
+        // Přidání URL pro přístup k obrázku
+        descriptor.Field("imageUrl")
+            .Type<StringType>()
+            .Resolve(context =>
+            {
+                var mriImage = context.Parent<MriImage>();
+                return $"/api/file/mri/{mriImage.Id}";
+            });
     }
 }

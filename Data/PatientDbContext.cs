@@ -25,6 +25,7 @@ public class PatientDbContext : DbContext
             entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.PersonalId).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Gender).IsRequired().HasMaxLength(1);
             
             // Indexy pro rychlejší vyhledávání
             entity.HasIndex(e => new { e.LastName, e.FirstName });

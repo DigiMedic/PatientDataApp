@@ -9,23 +9,32 @@ namespace PatientDataApp.GraphQL;
 public class Query
 {
     private readonly ILogger<Query> _logger;
+    private readonly IDbContextFactory<PatientDbContext> _contextFactory;
 
-    public Query(ILogger<Query> logger)
+    public Query(ILogger<Query> logger, IDbContextFactory<PatientDbContext> contextFactory)
     {
         _logger = logger;
+        _contextFactory = contextFactory;
     }
 
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public async Task<IEnumerable<Patient>> GetPatients([Service] PatientDbContext context)
+    public async Task<IEnumerable<Patient>> GetPatients()
     {
         try
         {
-            return await context.Patients
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            _logger.LogInformation("Fetching patients from database");
+            
+            var patients = await context.Patients
                 .Include(p => p.DiagnosticResults)
                 .Include(p => p.MriImages)
+                .Take(100)  // Limit počtu záznamů pro testování
                 .ToListAsync();
+                
+            _logger.LogInformation("Successfully fetched {Count} patients", patients.Count);
+            return patients;
         }
         catch (Exception ex)
         {
@@ -34,13 +43,15 @@ public class Query
         }
     }
 
-    public async Task<Patient?> GetPatient([Service] PatientDbContext context, int id)
+    public async Task<Patient?> GetPatient(int id)
     {
         try
         {
+            await using var context = await _contextFactory.CreateDbContextAsync();
             return await context.Patients
                 .Include(p => p.DiagnosticResults)
                 .Include(p => p.MriImages)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
         catch (Exception ex)
@@ -50,10 +61,11 @@ public class Query
         }
     }
 
-    public async Task<IEnumerable<DiagnosticResult>> GetDiagnosticResults([Service] PatientDbContext context)
+    public async Task<IEnumerable<DiagnosticResult>> GetDiagnosticResults()
     {
         try
         {
+            await using var context = await _contextFactory.CreateDbContextAsync();
             return await context.DiagnosticResults
                 .Include(d => d.Patient)
                 .OrderByDescending(d => d.Date)
@@ -66,10 +78,11 @@ public class Query
         }
     }
 
-    public async Task<IEnumerable<MriImage>> GetMriImages([Service] PatientDbContext context)
+    public async Task<IEnumerable<MriImage>> GetMriImages()
     {
         try
         {
+            await using var context = await _contextFactory.CreateDbContextAsync();
             return await context.MriImages
                 .Include(m => m.Patient)
                 .OrderByDescending(m => m.AcquisitionDate)

@@ -12,6 +12,7 @@ public class Mutation
         string lastName, 
         DateTime dateOfBirth,
         string personalId,
+        string gender,
         string? insuranceCompany,
         string? initialDiagnosis,
         [Service] PatientDbContext context)
@@ -28,9 +29,12 @@ public class Mutation
             LastName = lastName,
             DateOfBirth = dateOfBirth,
             PersonalId = personalId,
+            Gender = gender,
             InsuranceCompany = insuranceCompany,
             LastDiagnosis = initialDiagnosis,
-            LastExaminationDate = DateTime.UtcNow
+            LastExaminationDate = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
         context.Patients.Add(patient);
